@@ -1,0 +1,80 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // True when the signed-in user is the person who created the survey with this id.
+    function isSurveyOwner(surveyId) {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/surveys/$(surveyId)).data.ownerId == request.auth.uid;
+    }
+
+    // A share link is open while it exists (not revoked), belongs to the survey,
+    // and is less than 24 hours old. Uses the SERVER clock, so it cannot be bypassed.
+    function isShareOpen(shareId, surveyId) {
+      return exists(/databases/$(database)/documents/shares/$(shareId))
+        && get(/databases/$(database)/documents/shares/$(shareId)).data.surveyId == surveyId
+        && request.time < get(/databases/$(database)/documents/shares/$(shareId)).data.createdAt + duration.value(24, 'h');
+    }
+
+    // ---------------------------------------------------------------
+    // Surveys: the whole team collaborates.
+    //   - every signed-in user can see and edit every survey
+    //   - "ownerId" records who created it and can never be changed
+    //   - only the creator can delete a survey (this also removes its responses)
+    // ---------------------------------------------------------------
+    match /surveys/{surveyId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.questions is list;
+
+      allow update: if isSignedIn()
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.title is string
+        && request.resource.data.questions is list;
+
+      allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Responses: anyone holding a valid (unexpired) link may add one.
+      // Every signed-in team member can read them; only the survey's creator can delete them.
+      match /responses/{responseId} {
+        allow create: if request.resource.data.keys().hasOnly(['shareId', 'answers', 'submittedAt'])
+          && request.resource.data.keys().hasAll(['shareId', 'answers', 'submittedAt'])
+          && request.resource.data.shareId is string
+          && request.resource.data.answers is map
+          && request.resource.data.submittedAt == request.time
+          && isShareOpen(request.resource.data.shareId, surveyId);
+
+        allow read: if isSignedIn();
+
+        allow delete: if isSurveyOwner(surveyId);
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Shares: a snapshot of a survey that is readable through its
+    // unguessable id for 24 hours after creation.
+    //   - the public can open a link (get) while it is under 24 hours old
+    //   - any signed-in team member can list, create and remove links
+    // ---------------------------------------------------------------
+    match /shares/{shareId} {
+      allow get: if request.time < resource.data.createdAt + duration.value(24, 'h');
+
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/surveys/$(request.resource.data.surveyId));
+
+      allow delete: if isSignedIn();
+    }
+  }
+}
