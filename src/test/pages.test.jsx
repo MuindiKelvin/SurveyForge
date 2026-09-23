@@ -118,10 +118,33 @@ describe('PublicSurvey', () => {
       </MemoryRouter>,
     );
 
+  const acceptConsent = async (user) => {
+    await screen.findByRole('heading', { name: 'Customer survey' });
+    await user.click(screen.getByLabelText(/agree to have my responses/i));
+    await user.click(screen.getByRole('button', { name: /continue to survey/i }));
+  };
+
   it('shows an expired message when the link is not readable', async () => {
     shareService.getPublicShare.mockResolvedValue(null);
     renderPublic();
     expect(await screen.findByText(/link has expired/i)).toBeInTheDocument();
+  });
+
+  it('asks for consent before showing the survey, and blocks continuing until agreed', async () => {
+    const user = userEvent.setup();
+    const s = sampleSurvey();
+    shareService.getPublicShare.mockResolvedValue({ id: 'abc123', surveyId: 's1', title: s.title, description: s.description, questions: s.questions, expiresAt: Date.now() + 3600000 });
+    renderPublic();
+
+    await screen.findByRole('heading', { name: 'Customer survey' });
+    expect(screen.queryByRole('button', { name: /submit answers/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue to survey/i })).toBeDisabled();
+
+    await user.click(screen.getByLabelText(/agree to have my responses/i));
+    expect(screen.getByRole('button', { name: /continue to survey/i })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: /continue to survey/i }));
+
+    expect(await screen.findByRole('button', { name: /submit answers/i })).toBeInTheDocument();
   });
 
   it('validates, submits cleaned answers and thanks the respondent', async () => {
@@ -131,7 +154,7 @@ describe('PublicSurvey', () => {
     responseService.submitResponse.mockResolvedValue();
     renderPublic();
 
-    await screen.findByRole('heading', { name: 'Customer survey' });
+    await acceptConsent(user);
     await user.click(screen.getByRole('button', { name: /submit answers/i }));
     expect(await screen.findByText('This question is required.')).toBeInTheDocument();
     expect(responseService.submitResponse).not.toHaveBeenCalled();
@@ -159,7 +182,7 @@ describe('PublicSurvey', () => {
     shareService.getPublicShare.mockResolvedValue({ id: 'abc123', surveyId: 's1', title: s.title, description: '', questions: s.questions, expiresAt: null });
     responseService.submitResponse.mockRejectedValue({ code: 'permission-denied' });
     renderPublic();
-    await screen.findByRole('heading', { name: 'Customer survey' });
+    await acceptConsent(user);
     await user.type(screen.getAllByRole('textbox')[0], 'X');
     await user.click(screen.getByRole('button', { name: /submit answers/i }));
     expect(await screen.findByText(/expired or was withdrawn/i)).toBeInTheDocument();

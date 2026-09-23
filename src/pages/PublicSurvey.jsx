@@ -45,6 +45,8 @@ export default function PublicSurvey() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [consented, setConsented] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,6 +148,57 @@ export default function PublicSurvey() {
         <Message icon="bi-check-circle-fill" tone="text-success" title="Thank you!">
           Your answers have been sent. You can close this page now.
         </Message>
+      </Shell>
+    );
+  }
+
+  if (!consented) {
+    return (
+      <Shell>
+        <div className="card sf-public-title mb-4">
+          <div className="card-body p-4">
+            <h1 className="h3 mb-2 text-break">{share.title}</h1>
+            {share.description ? (
+              <p className="mb-0 text-secondary" style={{ whiteSpace: 'pre-line' }}>
+                {share.description}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="card shadow-sm">
+          <div className="card-body p-4">
+            <h2 className="h5 mb-3">
+              <i className="bi bi-shield-check me-2" aria-hidden="true" />
+              Before you begin
+            </h2>
+            <p className="text-secondary">
+              By taking this survey, your answers will be collected and stored so they can be reviewed by the people who
+              sent you this link. Participation is voluntary and you can close this page at any time without submitting.
+            </p>
+            <div className="form-check mt-3">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                id="sf-consent-check"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+              />
+              <label className="form-check-label" htmlFor="sf-consent-check">
+                I have read the above and agree to have my responses to this survey collected.
+              </label>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary mt-4"
+              disabled={!consentChecked}
+              onClick={() => setConsented(true)}
+            >
+              <i className="bi bi-arrow-right-circle me-2" aria-hidden="true" />
+              Continue to survey
+            </button>
+          </div>
+        </div>
       </Shell>
     );
   }
