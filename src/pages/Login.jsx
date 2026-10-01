@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { friendlyAuthError, useAuth } from '../context/AuthContext';
 import Loader from '../components/Loader';
+import { clearIdleNotice, hasIdleNotice } from '../hooks/useIdleLogout';
 import payoneerLogo from '../assets/payoneer-logo-circle.png';
 
 const POINTS = [
   { icon: 'bi-ui-checks-grid', text: 'Build surveys with any mix of question types' },
-  { icon: 'bi-link-45deg', text: 'Share a link that stops working after 24 hours' },
+  { icon: 'bi-link-45deg', text: 'Share a link that stops working after 7 days' },
   { icon: 'bi-file-earmark-spreadsheet', text: 'Download every result as Excel or PDF' },
 ];
 
@@ -21,6 +22,11 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [idleNotice] = useState(() => hasIdleNotice()); // signed out for inactivity?
+
+  useEffect(() => {
+    clearIdleNotice(); // show the message once, not on every later visit
+  }, []);
 
   if (loading) return <Loader fullPage label="Checking your session..." />;
   if (user) return <Navigate to={location.state?.from || '/'} replace />;
@@ -160,6 +166,11 @@ export default function Login() {
               </div>
             )}
 
+            {idleNotice && !error && !info && (
+              <div className="alert alert-warning py-2 small mt-3" role="status">
+                You were signed out because the app was inactive for a while. Please sign in again.
+              </div>
+            )}
             {error && (
               <div className="alert alert-danger py-2 small mt-3" role="alert">
                 {error}

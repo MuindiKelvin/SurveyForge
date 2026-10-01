@@ -128,7 +128,7 @@ export default function PublicSurvey() {
     return (
       <Shell>
         <Message icon="bi-hourglass-bottom" tone="text-warning" title="This survey link has expired">
-          Survey links only work for 24 hours. It may also have been withdrawn. Please ask the person who sent it for a new link.
+          Survey links only work for 7 days. It may also have been withdrawn. Please ask the person who sent it for a new link.
         </Message>
       </Shell>
     );

@@ -10,6 +10,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
+import { clearIdleNotice, markActivity, setIdleNotice, useIdleLogout } from '../hooks/useIdleLogout';
 
 const AuthContext = createContext(null);
 
@@ -42,15 +43,24 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!auth) return undefined;
     const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (u) clearIdleNotice();
       setUser(u);
       setLoading(false);
     });
     return unsubscribe;
   }, []);
 
+  // Sign the person out after a period with no activity (30 minutes by default).
+  const handleIdle = useCallback(async () => {
+    setIdleNotice();
+    await signOut(auth);
+  }, []);
+  useIdleLogout({ active: Boolean(user), onIdle: handleIdle });
+
   const signInWithGoogle = useCallback(async () => {
     try {
       await signInWithPopup(auth, googleProvider);
+      markActivity();
     } catch (err) {
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
       if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') {
@@ -63,10 +73,12 @@ export function AuthProvider({ children }) {
 
   const signInWithEmail = useCallback(async (email, password) => {
     await signInWithEmailAndPassword(auth, email.trim(), password);
+    markActivity();
   }, []);
 
   const signUpWithEmail = useCallback(async (name, email, password) => {
     const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+    markActivity();
     if (name && name.trim()) {
       await updateProfile(cred.user, { displayName: name.trim() });
       bump(); // the user object is mutated in place, so force consumers to re-render

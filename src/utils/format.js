@@ -19,13 +19,15 @@ export function formatDateTimeLong(ms) {
   });
 }
 
-/** "23h 59m left", "12m left" or "Expired" */
+/** "6d 23h left", "23h 59m left", "12m left" or "Expired" */
 export function formatTimeLeft(expiresAtMs, nowMs = Date.now()) {
   const diff = expiresAtMs - nowMs;
   if (diff <= 0) return 'Expired';
   const totalMinutes = Math.ceil(diff / 60000);
-  const h = Math.floor(totalMinutes / 60);
+  const d = Math.floor(totalMinutes / 1440);
+  const h = Math.floor((totalMinutes % 1440) / 60);
   const m = totalMinutes % 60;
+  if (d > 0) return `${d}d ${h}h left`;
   if (h > 0) return `${h}h ${m}m left`;
   return `${m}m left`;
 }

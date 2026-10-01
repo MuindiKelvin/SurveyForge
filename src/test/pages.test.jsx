@@ -35,7 +35,7 @@ vi.mock('../services/shareService', () => ({
   revokeShare: vi.fn(),
   getPublicShare: vi.fn(),
   shareUrl: (id) => `https://example.test/s/${id}`,
-  SHARE_TTL_MS: 86400000,
+  SHARE_TTL_MS: 604800000,
 }));
 vi.mock('../services/responseService', () => ({
   submitResponse: vi.fn(),
@@ -328,7 +328,7 @@ describe('SurveyDetail', () => {
       </MemoryRouter>,
     );
 
-  it('creates a 24-hour link and lists active and expired links', async () => {
+  it('creates a 7-day link and lists active and expired links', async () => {
     const user = userEvent.setup();
     surveyService.getSurvey.mockResolvedValue(sampleSurvey());
     surveyService.countResponses.mockResolvedValue(3);
@@ -342,7 +342,7 @@ describe('SurveyDetail', () => {
     expect(await screen.findByDisplayValue('https://example.test/s/live1')).toBeInTheDocument();
     expect(screen.getByText(/23h/)).toBeInTheDocument();
     expect(screen.getByText('Expired links')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /create 24-hour link/i }));
+    await user.click(screen.getByRole('button', { name: /create 7-day link/i }));
     await waitFor(() => expect(shareService.createShare).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' }), 'u1', 'Me'));
   });
 
@@ -352,7 +352,7 @@ describe('SurveyDetail', () => {
     shareService.listShares.mockResolvedValue([]);
     renderDetail();
     expect(await screen.findByText(/still a draft/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /create 24-hour link/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /create 7-day link/i })).toBeDisabled();
   });
 });
 

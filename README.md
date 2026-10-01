@@ -1,6 +1,6 @@
 # SurveyForge
 
-Build surveys, share links that expire after 24 hours, collect responses in Firebase, and download the results as Excel or PDF.
+Build surveys, share links that expire after 7 days, collect responses in Firebase, and download the results as Excel or PDF.
 
 **Stack:** React 18 (Vite) · React Router · Bootstrap 5 + Bootstrap Icons · Firebase Auth + Firestore + Hosting · Chart.js · jsPDF · docx · SheetJS
 
@@ -15,7 +15,7 @@ Build surveys, share links that expire after 24 hours, collect responses in Fire
 - **Edit-conflict protection**: if a teammate saves a survey while you are editing it, you are asked before your save replaces theirs.
 - **Download the survey** as PDF or Word (.docx).
 - **Branded documents**: every PDF and Word file (survey and results) carries the Payoneer circular logo and company name at the top of every page, and the company contact line plus page numbers in the footer. The Excel results workbook has the company name and contact line at the top of its Summary sheet.
-- **Share links** that stop working 24 hours after creation (enforced by the Firestore security rules using the server clock). Copy, WhatsApp, email, or remove a link early.
+- **Share links** that stop working 7 days after creation (enforced by the Firestore security rules using the server clock). Copy, WhatsApp, email, or remove a link early.
 - **Public survey page** - respondents need no account; answers are stored in Firestore.
 - **Results** page with charts per question, a table of individual responses, and downloads as **Excel (.xlsx)** and **PDF**.
 - Responsive - works on phones, tablets and desktops.
@@ -81,11 +81,15 @@ If you use a custom domain, add it under Authentication -> Settings -> **Authori
 | `npm run deploy:rules` | Deploy only the Firestore rules |
 | `npm run deploy:hosting` | Build, then deploy only hosting |
 
+## Automatic sign-out
+
+Signed-in users are signed out automatically after **30 minutes without activity** (mouse, keyboard, touch or scrolling) and must log in again; the login page explains why. Activity in any open tab keeps the session alive, and a session left idle overnight (or while the computer slept) is ended as soon as the app is opened again. To change the limit, set `VITE_IDLE_TIMEOUT_MINUTES` in `.env` (for example `1` to try it out) and restart `npm run dev`.
+
 ## How sharing and results work
 
 - Finishing a survey sets its status to **complete**. Only complete surveys can be shared. Any teammate can create or remove share links for any survey.
-- **Create 24-hour link** writes a document to `shares/{randomId}` containing a *snapshot* of the survey and a server timestamp. The link is `https://your-site/s/{randomId}` (24 random characters, not guessable).
-- The security rules only allow reading a share while `now < createdAt + 24h`, and only allow adding a response while the share exists and is under 24 hours old. After that the page shows "This survey link has expired". Removing a link revokes it immediately.
+- **Create 7-day link** writes a document to `shares/{randomId}` containing a *snapshot* of the survey and a server timestamp. The link is `https://your-site/s/{randomId}` (24 random characters, not guessable).
+- The security rules only allow reading a share while `now < createdAt + 7d`, and only allow adding a response while the share exists and is under 7 days old. After that the page shows "This survey link has expired". Removing a link revokes it immediately.
 - Editing a survey later does **not** change links that already exist - create a new link to share the updated version.
 - Responses are saved under `surveys/{surveyId}/responses`. Every signed-in teammate can read them; only the survey's creator can delete them. Responses from all of a survey's links are combined in the results.
 

@@ -2,8 +2,8 @@ import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, se
 import { db } from '../firebase';
 import { newShareId } from '../utils/ids';
 
-/** Links stop working 24 hours after they are created (enforced by the Firestore security rules). */
-export const SHARE_TTL_MS = 24 * 60 * 60 * 1000;
+/** Links stop working 7 days after they are created (enforced by the Firestore security rules). */
+export const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const toMillis = (ts) => (ts && typeof ts.toMillis === 'function' ? ts.toMillis() : null);
 

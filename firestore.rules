@@ -14,11 +14,11 @@ service cloud.firestore {
     }
 
     // A share link is open while it exists (not revoked), belongs to the survey,
-    // and is less than 24 hours old. Uses the SERVER clock, so it cannot be bypassed.
+    // and is less than 7 days old. Uses the SERVER clock, so it cannot be bypassed.
     function isShareOpen(shareId, surveyId) {
       return exists(/databases/$(database)/documents/shares/$(shareId))
         && get(/databases/$(database)/documents/shares/$(shareId)).data.surveyId == surveyId
-        && request.time < get(/databases/$(database)/documents/shares/$(shareId)).data.createdAt + duration.value(24, 'h');
+        && request.time < get(/databases/$(database)/documents/shares/$(shareId)).data.createdAt + duration.value(7, 'd');
     }
 
     // ---------------------------------------------------------------
@@ -60,12 +60,12 @@ service cloud.firestore {
 
     // ---------------------------------------------------------------
     // Shares: a snapshot of a survey that is readable through its
-    // unguessable id for 24 hours after creation.
-    //   - the public can open a link (get) while it is under 24 hours old
+    // unguessable id for 7 days after creation.
+    //   - the public can open a link (get) while it is under 7 days old
     //   - any signed-in team member can list, create and remove links
     // ---------------------------------------------------------------
     match /shares/{shareId} {
-      allow get: if request.time < resource.data.createdAt + duration.value(24, 'h');
+      allow get: if request.time < resource.data.createdAt + duration.value(7, 'd');
 
       allow list: if isSignedIn();
 

@@ -60,7 +60,7 @@ export default function SurveyDetail() {
     try {
       await createShare(survey, user.uid, personName(user));
       await refreshShares();
-      toast.success('Link created. It works for the next 24 hours.');
+      toast.success('Link created. It works for the next 7 days.');
     } catch (err) {
       console.error(err);
       toast.error('Could not create the link. Please try again.');
@@ -177,7 +177,7 @@ export default function SurveyDetail() {
                 </h2>
                 <button type="button" className="btn btn-primary" onClick={handleCreate} disabled={!isComplete || creating}>
                   {creating ? <span className="spinner-border spinner-border-sm me-2" aria-hidden="true" /> : <i className="bi bi-plus-lg me-2" aria-hidden="true" />}
-                  Create 24-hour link
+                  Create 7-day link
                 </button>
               </div>
 
@@ -194,7 +194,7 @@ export default function SurveyDetail() {
               )}
 
               <p className="text-secondary small">
-                Each link opens the survey exactly as it is now and stops working automatically 24 hours after you create it. Anyone with the link can answer without an account. You can remove a link
+                Each link opens the survey exactly as it is now and stops working automatically 7 days after you create it. Anyone with the link can answer without an account. You can remove a link
                 at any time.
               </p>
 
@@ -237,7 +237,7 @@ export default function SurveyDetail() {
                         </a>
                         <a
                           className="btn btn-sm btn-outline-secondary"
-                          href={`mailto:?subject=${encodeURIComponent(survey.title)}&body=${encodeURIComponent(`Please take a moment to complete this survey (the link is valid for 24 hours):\n\n${url}`)}`}
+                          href={`mailto:?subject=${encodeURIComponent(survey.title)}&body=${encodeURIComponent(`Please take a moment to complete this survey (the link is valid for 7 days):\n\n${url}`)}`}
                         >
                           <i className="bi bi-envelope me-1" aria-hidden="true" />
                           Email
