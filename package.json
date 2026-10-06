@@ -1,5 +1,5 @@
 {
-  "name": "survey-forge",
+  "name": "survey-hub",
   "private": true,
   "version": "1.0.0",
   "description": "Create, share and analyse surveys. React + Firebase + Bootstrap.",

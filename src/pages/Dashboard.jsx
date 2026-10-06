@@ -290,14 +290,18 @@ export default function Dashboard() {
                             </div>
                             <span className="small text-secondary">{s.progress.percent}%</span>
                           </div>
-                          <div className="mt-auto d-flex flex-wrap gap-2">
+                          <Link to={`/surveys/${s.id}`} className="btn btn-primary w-100 mt-auto mb-2" aria-label={`Open this survey: ${s.title || 'Untitled survey'}`}>
+                            <i className="bi bi-box-arrow-up-right me-2" aria-hidden="true" />
+                            Open this survey
+                          </Link>
+                          <div className="d-flex flex-wrap gap-2">
                             {isComplete ? (
-                              <Link to={`/surveys/${s.id}`} className="btn btn-sm btn-primary">
+                              <Link to={`/surveys/${s.id}`} className="btn btn-sm btn-outline-primary">
                                 <i className="bi bi-share me-1" aria-hidden="true" />
                                 Share
                               </Link>
                             ) : (
-                              <Link to={`/surveys/${s.id}/edit`} className="btn btn-sm btn-primary">
+                              <Link to={`/surveys/${s.id}/edit`} className="btn btn-sm btn-outline-primary">
                                 <i className="bi bi-pencil me-1" aria-hidden="true" />
                                 Continue
                               </Link>

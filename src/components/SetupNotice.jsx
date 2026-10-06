@@ -8,7 +8,7 @@ export default function SetupNotice() {
             Connect your Firebase project
           </h1>
           <p>
-            SurveyForge is running, but it does not have your Firebase settings yet. Do this once:
+            SurveyHub is running, but it does not have your Firebase settings yet. Do this once:
           </p>
           <ol className="mb-3">
             <li>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Bar } from 'react-chartjs-2';
 import { CHART_COLORS, INK, TRACK } from '../components/charts';
-import DownloadMenu from '../components/DownloadMenu';
+import DownloadResultsModal from '../components/DownloadResultsModal';
 import Loader from '../components/Loader';
 import QuestionResultCard from '../components/results/QuestionResultCard';
 import { useToast } from '../context/ToastContext';
@@ -21,6 +21,7 @@ export default function SurveyResults() {
   const [tab, setTab] = useState('summary');
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState('');
+  const [showDownload, setShowDownload] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -75,16 +76,20 @@ export default function SurveyResults() {
     [],
   );
 
-  const runExport = async (kind) => {
-    setExporting(kind);
+  const runExport = async (format, options) => {
+    setExporting(format);
     try {
-      if (kind === 'xlsx') {
+      if (format === 'xlsx') {
         const { exportResultsExcel } = await import('../utils/exportResultsExcel');
         exportResultsExcel(survey, responses);
-      } else {
+      } else if (format === 'pdf') {
         const { exportResultsPdf } = await import('../utils/exportResultsPdf');
         exportResultsPdf(survey, responses);
+      } else {
+        const { exportResultsData } = await import('../utils/exportResultsData');
+        exportResultsData(survey, responses, format, options);
       }
+      setShowDownload(false);
     } catch (err) {
       console.error(err);
       toast.error('Could not create the file. Please try again.');
@@ -137,17 +142,10 @@ export default function SurveyResults() {
             {refreshing ? <span className="spinner-border spinner-border-sm me-2" aria-hidden="true" /> : <i className="bi bi-arrow-clockwise me-2" aria-hidden="true" />}
             Refresh
           </button>
-          <DownloadMenu
-            label="Download results"
-            buttonClass="btn btn-primary"
-            hideLabelOnMobile={false}
-            disabled={responses.length === 0}
-            busyKey={exporting}
-            items={[
-              { key: 'xlsx', label: 'Excel workbook (.xlsx)', icon: 'bi-file-earmark-spreadsheet', onSelect: () => runExport('xlsx') },
-              { key: 'pdf', label: 'PDF report (.pdf)', icon: 'bi-file-earmark-pdf', onSelect: () => runExport('pdf') },
-            ]}
-          />
+          <button type="button" className="btn btn-primary" onClick={() => setShowDownload(true)} disabled={responses.length === 0}>
+            <i className="bi bi-download me-2" aria-hidden="true" />
+            Download results
+          </button>
         </div>
       </div>
 
@@ -233,7 +231,7 @@ export default function SurveyResults() {
             <div className="card">
               <div className="card-body">
                 <p className="small text-secondary">
-                  Showing the latest {plural(shownRows.length, 'response')} of {responses.length}. Download the Excel workbook to get every response.
+                  Showing the latest {plural(shownRows.length, 'response')} of {responses.length}. Use Download results (Excel, CSV, SPSS and more) to get every response.
                 </p>
                 <div className="table-responsive sf-resp-table">
                   <table className="table table-sm table-striped align-middle mb-0">
@@ -264,6 +262,14 @@ export default function SurveyResults() {
           )}
         </>
       )}
+
+      <DownloadResultsModal
+        show={showDownload}
+        onClose={() => setShowDownload(false)}
+        onDownload={runExport}
+        busy={Boolean(exporting)}
+        responseCount={responses.length}
+      />
     </div>
   );
 }

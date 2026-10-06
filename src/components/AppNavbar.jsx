@@ -42,7 +42,7 @@ export default function AppNavbar() {
           <span className="sf-logo" aria-hidden="true">
             <i className="bi bi-ui-checks-grid" />
           </span>
-          SurveyForge
+          SurveyHub
         </Link>
 
         <button

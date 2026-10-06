@@ -88,7 +88,7 @@ export default function Login() {
         <div>
           <div className="d-flex align-items-center gap-2 mb-5">
             <img src={payoneerLogo} alt="Payoneer" className="sf-brand-logo sf-brand-logo-lg" />
-            <span className="fs-4 fw-semibold">SurveyForge</span>
+            <span className="fs-4 fw-semibold">SurveyHub</span>
           </div>
           <h1 className="display-6 fw-semibold mb-4">Ask better questions. Get answers you can use.</h1>
           <ul className="list-unstyled d-grid gap-3 mb-0">
@@ -106,7 +106,7 @@ export default function Login() {
         <div className="w-100" style={{ maxWidth: 420 }}>
           <div className="d-flex align-items-center gap-2 mb-4 d-lg-none">
             <img src={payoneerLogo} alt="Payoneer" className="sf-brand-logo" />
-            <span className="fs-5 fw-semibold">SurveyForge</span>
+            <span className="fs-5 fw-semibold">SurveyHub</span>
           </div>
 
           <h1 className="h3 mb-1">{isSignUp ? 'Create your account' : 'Welcome back'}</h1>
@@ -189,7 +189,7 @@ export default function Login() {
           </form>
 
           <p className="text-center mt-4 mb-0 text-secondary">
-            {isSignUp ? 'Already have an account?' : 'New to SurveyForge?'}{' '}
+            {isSignUp ? 'Already have an account?' : 'New to SurveyHub?'}{' '}
             <button type="button" className="btn btn-link p-0 align-baseline" onClick={() => switchMode(isSignUp ? 'signin' : 'signup')}>
               {isSignUp ? 'Sign in' : 'Create an account'}
             </button>

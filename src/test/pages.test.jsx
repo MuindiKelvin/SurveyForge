@@ -43,6 +43,11 @@ vi.mock('../services/responseService', () => ({
   MAX_RESPONSES_LOADED: 5000,
 }));
 
+// File creation is tested in utils/exportData.test.js and utils/exports.test.js; here we only check the wiring.
+vi.mock('../utils/exportResultsData', () => ({ exportResultsData: vi.fn() }));
+vi.mock('../utils/exportResultsExcel', () => ({ exportResultsExcel: vi.fn() }));
+vi.mock('../utils/exportResultsPdf', () => ({ exportResultsPdf: vi.fn() }));
+
 const surveyService = await import('../services/surveyService');
 const shareService = await import('../services/shareService');
 const responseService = await import('../services/responseService');
@@ -54,6 +59,9 @@ const { default: SurveyDetail } = await import('../pages/SurveyDetail');
 const { default: SurveyResults } = await import('../pages/SurveyResults');
 const { default: Login } = await import('../pages/Login');
 const { default: SurveyForm } = await import('../components/survey/SurveyForm');
+const exportData = await import('../utils/exportResultsData');
+const exportExcel = await import('../utils/exportResultsExcel');
+const exportPdf = await import('../utils/exportResultsPdf');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -307,6 +315,24 @@ describe('Dashboard', () => {
     expect(screen.getAllByTestId('doughnut').length).toBeGreaterThan(0);
   });
 
+  it('gives every survey card an "Open this survey" button that goes to that survey', async () => {
+    const complete = sampleSurvey();
+    const draft = { ...sampleSurvey(), id: 's2', title: 'Draft one', status: 'draft' };
+    surveyService.listSurveys.mockResolvedValue([complete, draft]);
+    surveyService.countResponses.mockResolvedValue(0);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Customer survey');
+    const buttons = screen.getAllByRole('link', { name: /open this survey/i });
+    expect(buttons).toHaveLength(2);
+    expect(screen.getByRole('link', { name: 'Open this survey: Customer survey' })).toHaveAttribute('href', '/surveys/s1');
+    expect(screen.getByRole('link', { name: 'Open this survey: Draft one' })).toHaveAttribute('href', '/surveys/s2');
+    buttons.forEach((b) => expect(b).toHaveTextContent('Open this survey'));
+  });
+
   it('shows the empty state', async () => {
     surveyService.listSurveys.mockResolvedValue([]);
     render(
@@ -392,6 +418,114 @@ describe('SurveyResults', () => {
     );
     expect(await screen.findByText('No responses yet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download results/i })).toBeDisabled();
+  });
+});
+
+describe('SurveyResults download dialog', () => {
+  const twoResponses = (s) => [
+    { id: 'b', submittedAt: 2000, answers: { [s.questions[1].id]: 'Beta' } },
+    { id: 'a', submittedAt: 1000, answers: { [s.questions[1].id]: 'Alpha' } },
+  ];
+  const renderResults = async () => {
+    const s = sampleSurvey();
+    const rs = twoResponses(s);
+    surveyService.getSurvey.mockResolvedValue(s);
+    responseService.listResponses.mockResolvedValue(rs);
+    render(
+      <MemoryRouter initialEntries={['/surveys/s1/results']}>
+        <Routes>
+          <Route path="/surveys/:id/results" element={<SurveyResults />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByText('Your name');
+    return { s, rs, user: userEvent.setup() };
+  };
+  const openDialog = async (user) => {
+    await user.click(screen.getByRole('button', { name: /download results/i }));
+    return screen.findByRole('dialog', { name: /download results/i });
+  };
+
+  it('offers every format: reports, text, CSV, TSV, SPSS, JSON, NDJSON, XML and a codebook', async () => {
+    const { user } = await renderResults();
+    const dialog = await openDialog(user);
+    for (const name of [/^Excel workbook/, /^PDF report/, /^Plain text/, /^CSV/, /^TSV/, /^SPSS/, /^JSON/, /^NDJSON/, /^XML/, /^Codebook/]) {
+      expect(within(dialog).getByRole('radio', { name })).toBeInTheDocument();
+    }
+    expect(within(dialog).getByRole('radio', { name: /^Excel workbook/ })).toBeChecked(); // sensible default
+    expect(within(dialog).getByText(/2 responses will be included/)).toBeInTheDocument();
+  });
+
+  it('only shows the options a format understands', async () => {
+    const { user } = await renderResults();
+    const dialog = await openDialog(user);
+    expect(within(dialog).queryByText('Answer values')).not.toBeInTheDocument(); // Excel: no options
+    await user.click(within(dialog).getByRole('radio', { name: /^CSV/ }));
+    expect(within(dialog).getByText('Answer values')).toBeInTheDocument();
+    expect(within(dialog).getByText('Column headings')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/each checkbox choice in its own column/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('radio', { name: /^JSON/ }));
+    expect(within(dialog).getByText('Answer values')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Column headings')).not.toBeInTheDocument(); // JSON always uses short names
+    await user.click(within(dialog).getByRole('radio', { name: /^SPSS/ }));
+    expect(within(dialog).queryByText('Answer values')).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/numeric codes with value labels/i)).toBeInTheDocument();
+  });
+
+  it('downloads CSV with the chosen options', async () => {
+    const { s, rs, user } = await renderResults();
+    const dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole('radio', { name: /^CSV/ }));
+    await user.click(within(dialog).getByRole('radio', { name: /^Numeric codes/ }));
+    await user.click(within(dialog).getByRole('radio', { name: /^Both \(two header rows\)/ }));
+    await user.click(within(dialog).getByLabelText(/each checkbox choice in its own column/i));
+    await user.click(within(dialog).getByRole('button', { name: 'Download CSV' }));
+    await waitFor(() => expect(exportData.exportResultsData).toHaveBeenCalledTimes(1));
+    expect(exportData.exportResultsData).toHaveBeenCalledWith(s, rs, 'csv', { values: 'numeric', headers: 'both', splitMulti: true });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument()); // closes after a successful download
+  });
+
+  it('downloads SPSS, Excel and PDF through their own exporters', async () => {
+    const { s, rs, user } = await renderResults();
+    let dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole('radio', { name: /^SPSS/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Download SPSS' }));
+    await waitFor(() => expect(exportData.exportResultsData).toHaveBeenCalledWith(s, rs, 'sav', expect.any(Object)));
+
+    dialog = await openDialog(user);
+    expect(within(dialog).getByRole('radio', { name: /^SPSS/ })).toBeChecked(); // the dialog remembers the last format
+    await user.click(within(dialog).getByRole('radio', { name: /^Excel workbook/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Download Excel workbook' }));
+    await waitFor(() => expect(exportExcel.exportResultsExcel).toHaveBeenCalledWith(s, rs));
+
+    dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole('radio', { name: /^PDF report/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Download PDF report' }));
+    await waitFor(() => expect(exportPdf.exportResultsPdf).toHaveBeenCalledWith(s, rs));
+    expect(exportData.exportResultsData).toHaveBeenCalledTimes(1); // Excel and PDF did not go through the data exporter
+  });
+
+  it('reports a failure and keeps the dialog open so the person can try again', async () => {
+    const { user } = await renderResults();
+    exportData.exportResultsData.mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole('radio', { name: /^TSV/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Download TSV' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not create the file. Please try again.'));
+    expect(screen.getByRole('dialog', { name: /download results/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Download TSV' })).toBeEnabled();
+    spy.mockRestore();
+  });
+
+  it('Cancel closes the dialog without downloading', async () => {
+    const { user } = await renderResults();
+    const dialog = await openDialog(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(exportData.exportResultsData).not.toHaveBeenCalled();
   });
 });
 

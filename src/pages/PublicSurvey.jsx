@@ -15,7 +15,7 @@ function Shell({ children }) {
           <span className="sf-logo" aria-hidden="true">
             <i className="bi bi-ui-checks-grid" />
           </span>
-          <span className="fw-semibold">SurveyForge</span>
+          <span className="fw-semibold">SurveyHub</span>
         </div>
       </header>
       <main className="container py-4 py-md-5" style={{ maxWidth: 780 }}>

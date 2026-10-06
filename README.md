@@ -1,6 +1,6 @@
-# SurveyForge
+# SurveyHub
 
-Build surveys, share links that expire after 7 days, collect responses in Firebase, and download the results as Excel or PDF.
+Build surveys, share links that expire after 7 days, collect responses in Firebase, and download the results as Excel, PDF, plain text, CSV, TSV, SPSS (.sav), JSON, NDJSON or XML.
 
 **Stack:** React 18 (Vite) · React Router · Bootstrap 5 + Bootstrap Icons · Firebase Auth + Firestore + Hosting · Chart.js · jsPDF · docx · SheetJS
 
@@ -17,7 +17,7 @@ Build surveys, share links that expire after 7 days, collect responses in Fireba
 - **Branded documents**: every PDF and Word file (survey and results) carries the Payoneer circular logo and company name at the top of every page, and the company contact line plus page numbers in the footer. The Excel results workbook has the company name and contact line at the top of its Summary sheet.
 - **Share links** that stop working 7 days after creation (enforced by the Firestore security rules using the server clock). Copy, WhatsApp, email, or remove a link early.
 - **Public survey page** - respondents need no account; answers are stored in Firestore.
-- **Results** page with charts per question, a table of individual responses, and downloads as **Excel (.xlsx)** and **PDF**.
+- **Results** page with charts per question, a table of individual responses, and a **Download results** dialog with ten formats (see [Downloading results](#downloading-results)): Excel, PDF, plain text, CSV, TSV, SPSS `.sav`, JSON, NDJSON, XML and a codebook.
 - Responsive - works on phones, tablets and desktops.
 - A ready-made **Owner Business Diagnostic** template (43 questions, 10 sections).
 
@@ -81,6 +81,37 @@ If you use a custom domain, add it under Authentication -> Settings -> **Authori
 | `npm run deploy:rules` | Deploy only the Firestore rules |
 | `npm run deploy:hosting` | Build, then deploy only hosting |
 
+## Downloading results
+
+**Results -> Download results** opens a dialog. Pick a format; formats that are data files show the options they understand.
+
+| Format | File | Good for |
+| --- | --- | --- |
+| Excel workbook | `.xlsx` | A Summary sheet plus a Responses sheet |
+| PDF report | `.pdf` | A branded, shareable summary |
+| Plain text | `.txt` | A readable report: every response, question by question |
+| CSV | `.csv` | Excel, Google Sheets, R, Python, SPSS import (UTF-8 with BOM so accents open correctly) |
+| TSV | `.tsv` | Tab-separated; safe for answers that contain commas |
+| SPSS | `.sav` | Native SPSS data file with variable labels and value labels |
+| JSON | `.json` | Variable definitions + all responses in one file |
+| NDJSON | `.ndjson` | One JSON object per line; data pipelines |
+| XML | `.xml` | Variable definitions + all responses |
+| Codebook | `.csv` | Data dictionary: every variable, its question and what each numeric code means |
+
+**Options for CSV, TSV, JSON, NDJSON, XML and the codebook**
+
+- **Answer values** - *Choice text* (`Very satisfied`) or *Numeric codes* (`5`). Codes are the position of the choice in the survey (1, 2, 3 ...); Yes = 1, No = 2. Rating answers are always numbers.
+- **Column headings** (CSV / TSV only) - short names (`Q1`, `Q3_2`), the full question text (`1. How satisfied are you?`), or both as two header rows (short names first, as Qualtrics does). JSON, NDJSON and XML always use the short names and describe each one in their variable list.
+- **Put each checkbox choice in its own column** - one column per choice (`Q5_1`, `Q5_2` ...). With numeric codes each column holds 1 (selected) or 0 (not selected); with choice text it holds the choice or stays empty. Off = one column per question (`A; C`, or `1,3` with codes).
+
+**Variable names** are `Q<number>` where the number is the question's position (section headings are not counted), `Q<number>_<n>` for the columns of a grid or split checkbox question, plus `ResponseNumber`, `ResponseID` and `SubmittedAt` (UTC, ISO 8601). A blank cell / `null` means "no answer".
+
+**SPSS export** always uses numeric codes with value labels and split checkbox columns (the way SPSS expects survey data), so it has no options. Variable names, question text as variable labels, value labels, UTF-8 text and missing values are written. Text answers longer than 255 bytes are stored as SPSS "very long strings", so nothing is cut off (up to SPSS's 32,767-byte limit).
+
+**Safe by default** - anyone with a link can submit a response, so text answers that start with `=`, `+`, `-`, `@`, a tab or a carriage return are prefixed with an apostrophe in CSV and TSV files so that Excel or Google Sheets can never run them as formulas. Numbers and ordinary text are not changed. The other formats are written exactly as submitted.
+
+**If a survey is edited after responses came in** and a stored answer no longer matches any current choice, it is still exported: with numeric codes it gets the next free code after the current choices (and checkbox columns gain an extra column for it).
+
 ## Automatic sign-out
 
 Signed-in users are signed out automatically after **30 minutes without activity** (mouse, keyboard, touch or scrolling) and must log in again; the login page explains why. Activity in any open tab keeps the session alive, and a session left idle overnight (or while the computer slept) is ended as soon as the app is opened again. To change the limit, set `VITE_IDLE_TIMEOUT_MINUTES` in `.env` (for example `1` to try it out) and restart `npm run dev`.
@@ -106,10 +137,13 @@ shares/{shareId}              surveyId, ownerId (who made the link), createdByNa
 ```
 src/
   pages/        Login, Dashboard, SurveyBuilder, SurveyDetail (share + downloads), SurveyResults, PublicSurvey
-  components/   navbar, modal, question editor, progress charts, respondent form, result cards
+  components/   navbar, modal, question editor, progress charts, respondent form, result cards,
+                DownloadResultsModal (format + options picker)
   services/     Firestore access (surveys, shares, responses)
   context/      auth + toast providers
-  utils/        survey model/validation, answers, analysis, PDF/Word/Excel exporters
+  utils/        survey model/validation, answers, analysis, PDF/Word/Excel exporters,
+                dataset.js (flat table behind every data export), exportFormats.js (format list),
+                exportResultsData.js (CSV/TSV/JSON/NDJSON/XML/text/codebook), spssSav.js (.sav writer)
   templates/    Owner Business Diagnostic starter survey
   config/       company.js - company name, contact details and brand colours printed on documents
   assets/       payoneer-logo-circle.png (used on documents) and payoneer-logo.png (original banner)
@@ -132,7 +166,7 @@ After pulling this update, redeploy the security rules: `npm run deploy:rules`.
 ## Notes and limits
 
 - Anyone with a valid link can submit - there is no one-response-per-person check.
-- The results screen loads the newest 5,000 responses per survey. The PDF report lists the first 200 individual responses; the Excel file contains all loaded responses.
+- The results screen loads the newest 5,000 responses per survey. The PDF report lists the first 200 individual responses; every other download (Excel, CSV, TSV, SPSS, JSON, NDJSON, XML, text) contains all loaded responses.
 - PDF files use a built-in font that covers Latin characters (English, Swahili, French, etc.). Other scripts are replaced with `?` in PDFs; Word and Excel keep them.
 - Firestore's free tier is generous, but viewing the dashboard and results reads documents (one count query per survey on the dashboard).
 - Keep `.env` private to your own machine/CI. Firebase web config values are not secret, but they identify your project.
