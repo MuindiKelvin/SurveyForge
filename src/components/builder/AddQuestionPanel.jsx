@@ -6,8 +6,9 @@ export default function AddQuestionPanel({ onAdd }) {
       <div className="card-body">
         <h2 className="h6 mb-3">
           <i className="bi bi-plus-circle me-2 text-primary" aria-hidden="true" />
-          Add a question
+          Add a question at the end
         </h2>
+        <p className="small text-secondary mb-3">Forgot something earlier on? Use an <strong>Insert here</strong> button between any two questions to add it exactly where it belongs.</p>
         <div className="row g-2">
           {QUESTION_TYPES.map((t) => (
             <div className="col-6 col-md-4 col-xl-3" key={t.value}>

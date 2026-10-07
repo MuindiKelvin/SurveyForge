@@ -5,15 +5,19 @@ import { CHART_COLORS, INK, TRACK } from '../components/charts';
 import ConfirmModal from '../components/ConfirmModal';
 import Loader from '../components/Loader';
 import Modal from '../components/Modal';
+import VerifiedTick from '../components/VerifiedTick';
 import { useAuth } from '../context/AuthContext';
+import { useMembers } from '../hooks/useMembers';
 import { useToast } from '../context/ToastContext';
 import { countResponses, deleteSurveyCascade, duplicateSurvey, listSurveys } from '../services/surveyService';
 import { TEMPLATES } from '../templates/ownerDiagnostic';
 import { formatDate, personName, plural } from '../utils/format';
+import { creditTicks, creatorLabel, editedByAnotherPerson } from '../utils/members';
 import { computeProgress } from '../utils/surveyModel';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const members = useMembers();
   const toast = useToast();
   const navigate = useNavigate();
   const [surveys, setSurveys] = useState(null);
@@ -264,8 +268,9 @@ export default function Dashboard() {
                   const isComplete = s.status === 'complete';
                   const n = counts[s.id];
                   const isOwner = s.ownerId === user.uid;
-                  const creator = isOwner ? 'you' : s.ownerName || 'a teammate';
-                  const editor = s.updatedByName && s.updatedByName !== s.ownerName ? s.updatedByName : '';
+                  const creator = creatorLabel({ me: user, ownerId: s.ownerId, ownerName: s.ownerName });
+                  const editor = editedByAnotherPerson({ me: user, ownerId: s.ownerId, ownerName: s.ownerName, updatedById: s.updatedById, updatedByName: s.updatedByName }) ? s.updatedByName : '';
+                  const ticks = creditTicks({ me: user, members, ownerId: s.ownerId, ownerName: s.ownerName, updatedById: s.updatedById, updatedByName: s.updatedByName, editorShown: Boolean(editor) });
                   return (
                     <div className="col-12 col-md-6 col-xl-4" key={s.id}>
                       <div className="card h-100 sf-survey-card">
@@ -282,7 +287,9 @@ export default function Dashboard() {
                           <div className="small text-secondary mb-2 text-break">
                             <i className="bi bi-person me-1" aria-hidden="true" />
                             Created by {creator}
+                            <VerifiedTick verified={ticks.creator} />
                             {editor ? ` \u00B7 last edited by ${editor}` : ''}
+                            {editor && <VerifiedTick verified={ticks.editor} />}
                           </div>
                           <div className="d-flex align-items-center gap-2 mb-3">
                             <div className="progress flex-grow-1" style={{ height: 6 }} role="progressbar" aria-label="Survey completion" aria-valuenow={s.progress.percent} aria-valuemin={0} aria-valuemax={100}>

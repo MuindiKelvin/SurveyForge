@@ -7,8 +7,9 @@ Build surveys, share links that expire after 7 days, collect responses in Fireba
 ## Features
 
 - **Sign in** with Google or email + password (Firebase uses the email as the username). Password reset included.
+- **Email verification tick**: a green tick appears on your avatar and in the account menu once your email is verified (Google accounts are verified automatically). Email sign-ups are sent a verification link; unverified users see an amber warning mark and can resend the link or re-check from the account menu. Access is not blocked while unverified. Every member's tick is also shown beside their name on survey cards, the survey page and the editor. Each person's status is published to a `members` collection when they sign in, and the security rules only accept a tick that Firebase itself confirms, so it cannot be faked. A teammate's tick appears after they next open the app.
 - **Survey builder** with these question types: short answer, paragraph, multiple choice, checkboxes (optional "select up to N"), dropdown, rating scale, yes/no, grid (rows x choices), number, date, email and section headings.
-  Add, edit, reorder, duplicate and delete questions; paste many options at once; preview exactly what respondents see.
+  Add, edit, reorder, duplicate and delete questions; **insert a question or section anywhere** with the *Insert here* button between any two questions (the bottom panel adds to the end); paste many options at once; preview exactly what respondents see.
 - **Creation progress charts**: completion ring, questions-by-type chart, question-status chart and a checklist. "Mark complete" unlocks at 100%.
 - **Team collaboration**: every signed-in user sees **all** surveys and **all** results, and can edit, duplicate and share any survey. The dashboard shows who created each survey and who saved it last, with an *All surveys / Created by me* filter.
 - **Save** drafts and complete surveys. Duplicate from the dashboard; only the person who created a survey can delete it.

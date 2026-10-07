@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  reload,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -10,6 +12,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
+import { syncMember } from '../services/memberService';
 import { clearIdleNotice, markActivity, setIdleNotice, useIdleLogout } from '../hooks/useIdleLogout';
 
 const AuthContext = createContext(null);
@@ -50,6 +53,28 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
+  // Someone who verifies their email in another tab or app gets the tick as soon as they come back here.
+  useEffect(() => {
+    if (!user || user.emailVerified) return undefined;
+    const recheck = async () => {
+      try {
+        await reload(user);
+        if (user.emailVerified) bump(); // the user object is mutated in place, so force consumers to re-render
+      } catch (err) {
+        // offline or session expired: keep the current state, the next focus will retry
+      }
+    };
+    window.addEventListener('focus', recheck);
+    return () => window.removeEventListener('focus', recheck);
+  }, [user]);
+
+  // Publish name + verification status so teammates see the tick. `version` re-runs this after a profile
+  // update or a verification re-check; syncMember skips the write when nothing changed.
+  useEffect(() => {
+    if (!user) return;
+    syncMember(user).catch(() => {}); // a failed sync must never affect signing in
+  }, [user, version]);
+
   // Sign the person out after a period with no activity (30 minutes by default).
   const handleIdle = useCallback(async () => {
     setIdleNotice();
@@ -79,10 +104,29 @@ export function AuthProvider({ children }) {
   const signUpWithEmail = useCallback(async (name, email, password) => {
     const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
     markActivity();
+    try {
+      await sendEmailVerification(cred.user); // never block sign-up if the email cannot be sent
+    } catch (err) {
+      // the person can request another one from the account menu
+    }
     if (name && name.trim()) {
       await updateProfile(cred.user, { displayName: name.trim() });
       bump(); // the user object is mutated in place, so force consumers to re-render
     }
+  }, []);
+
+  /** Sends (another) verification email to the signed-in user. */
+  const resendVerification = useCallback(async () => {
+    if (!auth || !auth.currentUser) throw new Error('You need to be signed in first.');
+    await sendEmailVerification(auth.currentUser);
+  }, []);
+
+  /** Re-reads the account from Firebase; resolves to true when the email is now verified. */
+  const refreshUser = useCallback(async () => {
+    if (!auth || !auth.currentUser) return false;
+    await reload(auth.currentUser);
+    bump();
+    return Boolean(auth.currentUser.emailVerified);
   }, []);
 
   const resetPassword = useCallback(async (email) => {
@@ -94,9 +138,20 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, version }),
-    // `version` is intentionally a dependency so profile updates propagate.
-    [user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, version],
+    () => ({
+      user,
+      loading,
+      signInWithGoogle,
+      signInWithEmail,
+      signUpWithEmail,
+      resetPassword,
+      resendVerification,
+      refreshUser,
+      logout,
+      version,
+    }),
+    // `version` is intentionally a dependency so profile and verification updates propagate.
+    [user, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, resendVerification, refreshUser, logout, version],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

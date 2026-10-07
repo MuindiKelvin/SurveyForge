@@ -93,7 +93,14 @@ body {
   width: 28px; height: 28px; border-radius: 50%;
   background: var(--sf-teal); color: #fff; font-size: 0.72rem; font-weight: 600;
 }
-.sf-user-menu { position: absolute; right: 0; left: auto; top: calc(100% + 6px); min-width: 210px; }
+.sf-avatar-wrap { position: relative; display: inline-flex; }
+.sf-verify-badge {
+  position: absolute; right: -6px; bottom: -6px;
+  font-size: 0.8rem; line-height: 1; border-radius: 50%; background: #fff;
+}
+.sf-verified { color: #198754; }
+.sf-unverified { color: #b26a00; }
+.sf-user-menu { position: absolute; right: 0; left: auto; top: calc(100% + 6px); min-width: 240px; }
 
 /* ---- login ---- */
 .sf-login { min-height: 100vh; display: flex; }
@@ -135,6 +142,15 @@ body {
   background: rgba(var(--sf-teal-rgb), 0.1); color: var(--sf-teal); font-weight: 600; font-size: 0.9rem;
 }
 .sf-qnum-section { background: var(--sf-teal); color: #fff; }
+.sf-insert { position: relative; display: flex; justify-content: center; align-items: center; height: 22px; margin: -0.25rem 0 0.5rem; }
+.sf-insert::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--sf-line); }
+.sf-insert-btn {
+  position: relative; display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0 0.7rem; height: 22px; border: 1px solid var(--sf-line); border-radius: 999px;
+  background: var(--sf-paper); color: #6b7479; font-size: 0.75rem; line-height: 1;
+}
+.sf-insert-btn:hover, .sf-insert-btn:focus-visible { border-color: var(--sf-teal); color: var(--sf-teal); background: #fff; }
+.sf-insert-panel { border-color: var(--sf-teal); box-shadow: 0 4px 14px rgba(20, 36, 43, 0.08); }
 .sf-type-btn:hover { border-color: var(--sf-teal); background: rgba(var(--sf-teal-rgb), 0.06); color: var(--sf-ink); }
 .sf-ring { width: 128px; height: 128px; }
 .sf-ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; line-height: 1.1; }

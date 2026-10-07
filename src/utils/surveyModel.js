@@ -235,3 +235,14 @@ export function computeProgress(survey) {
     issuesById,
   };
 }
+
+/**
+ * Returns a new list with `question` placed at `index` (0 = first). An index that is missing, not a whole
+ * number or past the end appends it; a negative index puts it first. The original list is not changed.
+ */
+export function insertQuestionAt(questions, question, index) {
+  const list = [...questions];
+  const at = Number.isInteger(index) ? Math.max(0, Math.min(index, list.length)) : list.length;
+  list.splice(at, 0, question);
+  return list;
+}

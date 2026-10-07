@@ -29,6 +29,10 @@ vi.mock('../services/surveyService', () => ({
   countResponses: vi.fn(),
   deleteSurveyCascade: vi.fn(),
 }));
+vi.mock('../services/memberService', () => ({
+  listMembers: vi.fn().mockResolvedValue({}),
+  syncMember: vi.fn(),
+}));
 vi.mock('../services/shareService', () => ({
   createShare: vi.fn(),
   listShares: vi.fn(),
@@ -50,6 +54,7 @@ vi.mock('../utils/exportResultsPdf', () => ({ exportResultsPdf: vi.fn() }));
 
 const surveyService = await import('../services/surveyService');
 const shareService = await import('../services/shareService');
+const memberService = await import('../services/memberService');
 const responseService = await import('../services/responseService');
 
 const { default: PublicSurvey } = await import('../pages/PublicSurvey');
@@ -289,6 +294,63 @@ describe('SurveyBuilder', () => {
     await waitFor(() => expect(surveyService.updateSurvey).toHaveBeenCalled());
     expect(surveyService.updateSurvey.mock.calls[0][0]).toBe('s1');
     expect(surveyService.updateSurvey.mock.calls[0][1].status).toBe('draft');
+  });
+
+  describe('insert at a position', () => {
+    const cardOrder = () => [...document.querySelectorAll('[id^="qcard-"]')].map((el) => el.querySelector('.fw-semibold')?.textContent);
+
+    it('inserts a new question exactly where the person chose, not at the end', async () => {
+      const user = userEvent.setup();
+      surveyService.getSurvey.mockResolvedValue(sampleSurvey());
+      renderBuilder('/surveys/s1/edit');
+      await screen.findByDisplayValue('Customer survey');
+      expect(screen.getByText('(5)')).toBeInTheDocument();
+      const before = cardOrder();
+      expect(before.slice(0, 3)).toEqual(['About you', 'Your name', 'Favourite colour']);
+
+      // position 3 = between "Your name" and "Favourite colour"
+      await user.click(screen.getByRole('button', { name: 'Insert a question or section at position 3' }));
+      const picker = screen.getByRole('group', { name: 'Choose what to insert at position 3' });
+      expect(within(picker).getByText(/Insert after/)).toHaveTextContent('Your name');
+      await user.click(within(picker).getByRole('button', { name: /paragraph/i }));
+
+      expect(screen.getByText('(6)')).toBeInTheDocument();
+      const after = cardOrder();
+      expect(after).toHaveLength(before.length + 1);
+      expect(after.slice(0, 2)).toEqual(['About you', 'Your name']);
+      expect(after[2]).toBe('Untitled question');
+      expect(after[3]).toBe('Favourite colour');
+      expect(screen.queryByRole('group', { name: /Choose what to insert/ })).not.toBeInTheDocument(); // picker closes
+    });
+
+    it('can insert a section at the very start, and cancel leaves the survey unchanged', async () => {
+      const user = userEvent.setup();
+      surveyService.getSurvey.mockResolvedValue(sampleSurvey());
+      renderBuilder('/surveys/s1/edit');
+      await screen.findByDisplayValue('Customer survey');
+      const before = cardOrder();
+
+      await user.click(screen.getByRole('button', { name: 'Insert a question or section at position 1' }));
+      await user.click(within(screen.getByRole('group', { name: /Choose what to insert/ })).getByRole('button', { name: 'Cancel' }));
+      expect(cardOrder()).toEqual(before);
+
+      await user.click(screen.getByRole('button', { name: 'Insert a question or section at position 1' }));
+      await user.click(within(screen.getByRole('group', { name: /Choose what to insert/ })).getByRole('button', { name: /section heading/i }));
+      const after = cardOrder();
+      expect(after[0]).toBe('Untitled section');
+      expect(after.slice(1)).toEqual(before);
+      expect(screen.getByText('(5)')).toBeInTheDocument(); // a section is not a question
+    });
+
+    it('shows no insert buttons on an empty survey, and the bottom panel still adds to the end', async () => {
+      const user = userEvent.setup();
+      renderBuilder('/surveys/new');
+      expect(screen.queryByRole('button', { name: /Insert a question or section/ })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /short answer/i }));
+      await user.click(screen.getByRole('button', { name: /paragraph/i }));
+      expect(cardOrder()).toEqual(['Untitled question', 'Untitled question']);
+      expect(screen.getByText('(2)')).toBeInTheDocument();
+    });
   });
 
   it('shows a not-found page for a survey the user cannot open', async () => {
@@ -553,6 +615,39 @@ describe('Login', () => {
 describe('Team collaboration', () => {
   const teammateSurvey = () => ({ ...sampleSurvey(), id: 's9', title: 'Wanjiku survey', ownerId: 'u2', ownerName: 'Wanjiku', updatedByName: 'Brian' });
 
+  it('dashboard shows a verified tick beside every verified member, including teammates', async () => {
+    memberService.listMembers.mockResolvedValue({ u2: { name: 'Wanjiku', emailVerified: true }, u3: { name: 'Brian', emailVerified: false } });
+    auth.user = { uid: 'u1', email: 'me@example.com', displayName: 'Me', emailVerified: false };
+    surveyService.listSurveys.mockResolvedValue([{ ...sampleSurvey(), id: 's9', title: 'Wanjiku survey', ownerId: 'u2', ownerName: 'Wanjiku', updatedByName: 'Brian', updatedById: 'u3' }]);
+    surveyService.countResponses.mockResolvedValue(0);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Wanjiku survey')).toBeInTheDocument();
+    // Wanjiku (verified) gets a tick; Brian (not verified) does not
+    await waitFor(() => expect(screen.getAllByRole('img', { name: 'Email verified' })).toHaveLength(1));
+    auth.user = { uid: 'u1', email: 'me@example.com', displayName: 'Me' };
+    memberService.listMembers.mockResolvedValue({});
+  });
+
+  it('dashboard shows your own name (not "you") with a single tick when you created and edited the survey', async () => {
+    auth.user = { uid: 'u1', email: 'me@example.com', displayName: 'Me', emailVerified: true };
+    surveyService.listSurveys.mockResolvedValue([{ ...sampleSurvey(), ownerName: 'me@example.com', updatedByName: 'Me', updatedById: 'u1' }]);
+    surveyService.countResponses.mockResolvedValue(0);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/Created by Me/)).toBeInTheDocument(); // your name, not "you"
+    expect(screen.queryByText(/Created by you/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/last edited by/)).not.toBeInTheDocument(); // same person: no repeat
+    expect(screen.getAllByRole('img', { name: 'Email verified' })).toHaveLength(1); // a single tick, after the name
+    auth.user = { uid: 'u1', email: 'me@example.com', displayName: 'Me' };
+  });
+
   it('dashboard lists surveys created by teammates, says who made them, and only offers delete on your own', async () => {
     const user = userEvent.setup();
     const mine = sampleSurvey();
@@ -567,7 +662,7 @@ describe('Team collaboration', () => {
     expect(screen.getByText('Customer survey')).toBeInTheDocument();
     expect(screen.getByText(/Created by Wanjiku/)).toBeInTheDocument();
     expect(screen.getByText(/last edited by Brian/)).toBeInTheDocument();
-    expect(screen.getByText(/Created by you/)).toBeInTheDocument();
+    expect(screen.getByText(/Created by Me/)).toBeInTheDocument();
     // the listing is no longer filtered by user id
     expect(surveyService.listSurveys).toHaveBeenCalledWith();
 

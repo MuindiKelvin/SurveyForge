@@ -59,6 +59,30 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
+    // Members: one small profile per person so teammates can see who has a
+    // verified email (the green tick).
+    //   - every signed-in user can read them
+    //   - you can only write your own profile
+    //   - "emailVerified" must equal what Firebase says about the signed-in
+    //     token, so nobody can claim a tick they have not earned
+    // ---------------------------------------------------------------
+    match /members/{uid} {
+      allow read: if isSignedIn();
+
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'emailVerified', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['name', 'emailVerified', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 200
+        && request.resource.data.emailVerified is bool
+        && request.resource.data.emailVerified == (request.auth.token.email_verified == true)
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------
     // Shares: a snapshot of a survey that is readable through its
     // unguessable id for 7 days after creation.
     //   - the public can open a link (get) while it is under 7 days old

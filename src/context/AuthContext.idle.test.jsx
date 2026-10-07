@@ -9,6 +9,8 @@ const signOut = vi.fn(async () => {
 
 vi.mock('firebase/auth', () => ({
   createUserWithEmailAndPassword: vi.fn(),
+  reload: vi.fn(),
+  sendEmailVerification: vi.fn(),
   onAuthStateChanged: (_auth, cb) => {
     authCallback = cb;
     return () => {};

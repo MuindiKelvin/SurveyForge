@@ -27,6 +27,7 @@ function mapSurvey(snap) {
     ownerId: d.ownerId,
     ownerName: d.ownerName || '', // who created it (older surveys may not have a name)
     updatedByName: d.updatedByName || '', // who saved it last
+    updatedById: d.updatedById || '', // their user id (older surveys do not have one)
     createdAt: toMillis(d.createdAt),
     updatedAt: toMillis(d.updatedAt),
   };
@@ -59,6 +60,7 @@ export async function createSurvey(uid, data) {
     ownerId: uid,
     ownerName: data.ownerName || '',
     updatedByName: data.ownerName || '',
+    updatedById: uid,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -72,6 +74,7 @@ export async function updateSurvey(id, data) {
     questions: data.questions,
     status: data.status,
     updatedByName: data.updatedByName || '',
+    updatedById: data.updatedById || '',
     updatedAt: serverTimestamp(),
   });
 }

@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Loader from '../components/Loader';
+import VerifiedTick from '../components/VerifiedTick';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useMembers } from '../hooks/useMembers';
 import { useNow } from '../hooks/useNow';
 import { createShare, listShares, revokeShare, shareUrl } from '../services/shareService';
 import { countResponses, getSurvey } from '../services/surveyService';
 import { copyText } from '../utils/clipboard';
 import { formatDateTimeLong, formatTimeLeft, personName, plural } from '../utils/format';
+import { creditTicks, creatorLabel, editedByAnotherPerson } from '../utils/members';
 import { computeProgress } from '../utils/surveyModel';
 
 export default function SurveyDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const members = useMembers();
   const toast = useToast();
   const now = useNow(30000);
   const [survey, setSurvey] = useState(undefined); // undefined = loading, null = not found
@@ -123,6 +127,8 @@ export default function SurveyDetail() {
 
   const progress = computeProgress(survey);
   const isComplete = survey.status === 'complete';
+  const editorShown = editedByAnotherPerson({ me: user, ownerId: survey.ownerId, ownerName: survey.ownerName, updatedById: survey.updatedById, updatedByName: survey.updatedByName });
+  const ticks = creditTicks({ me: user, members, ownerId: survey.ownerId, ownerName: survey.ownerName, updatedById: survey.updatedById, updatedByName: survey.updatedByName, editorShown });
   const activeShares = shares.filter((s) => s.expiresAt > now);
   const expiredShares = shares.filter((s) => s.expiresAt <= now);
 
@@ -149,8 +155,12 @@ export default function SurveyDetail() {
           </div>
           <div className="small text-secondary mt-1">
             <i className="bi bi-person me-1" aria-hidden="true" />
-            Created by {survey.ownerId === user.uid ? 'you' : survey.ownerName || 'a teammate'}
-            {survey.updatedByName && survey.updatedByName !== survey.ownerName ? ` \u00B7 last edited by ${survey.updatedByName}` : ''}
+            Created by {creatorLabel({ me: user, ownerId: survey.ownerId, ownerName: survey.ownerName })}
+            <VerifiedTick verified={ticks.creator} />
+            {editorShown ? ` \u00B7 last edited by ${survey.updatedByName}` : ''}
+            {editorShown && (
+              <VerifiedTick verified={ticks.editor} />
+            )}
             {survey.updatedAt ? ` \u00B7 ${formatDateTimeLong(survey.updatedAt)}` : ''}
           </div>
         </div>

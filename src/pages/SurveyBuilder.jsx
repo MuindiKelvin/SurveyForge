@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AddQuestionPanel from '../components/builder/AddQuestionPanel';
+import InsertPoint from '../components/builder/InsertPoint';
 import ProgressPanel from '../components/builder/ProgressPanel';
 import QuestionEditor from '../components/builder/QuestionEditor';
 import ConfirmModal from '../components/ConfirmModal';
@@ -8,16 +9,20 @@ import DownloadMenu from '../components/DownloadMenu';
 import Loader from '../components/Loader';
 import Modal from '../components/Modal';
 import SurveyForm from '../components/survey/SurveyForm';
+import VerifiedTick from '../components/VerifiedTick';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useMembers } from '../hooks/useMembers';
 import { createSurvey, getSurvey, updateSurvey } from '../services/surveyService';
 import { TEMPLATES } from '../templates/ownerDiagnostic';
 import { formatDateTimeLong, personName } from '../utils/format';
+import { creatorLabel, creditTicks, editedByAnotherPerson } from '../utils/members';
 import {
   computeProgress,
   createQuestion,
   duplicateQuestion,
   getQuestionNumbers,
+  insertQuestionAt,
   normalizeSurveyForSave,
 } from '../utils/surveyModel';
 
@@ -66,6 +71,7 @@ export default function SurveyBuilder() {
   const [search] = useSearchParams();
   const templateKey = search.get('template');
   const { user } = useAuth();
+  const members = useMembers();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -73,6 +79,7 @@ export default function SurveyBuilder() {
   const [loading, setLoading] = useState(Boolean(id));
   const [notFound, setNotFound] = useState(false);
   const [openIds, setOpenIds] = useState({});
+  const [insertAt, setInsertAt] = useState(null); // position whose "insert" picker is open (null = none)
   const [dirty, setDirty] = useState(() => Boolean(!id && TEMPLATES[templateKey]));
   const [saving, setSaving] = useState('');
   const [exporting, setExporting] = useState('');
@@ -105,7 +112,7 @@ export default function SurveyBuilder() {
           setNotFound(true);
         } else {
           baselineRef.current = s.updatedAt || null;
-          setAuthorInfo({ ownerId: s.ownerId, ownerName: s.ownerName, updatedByName: s.updatedByName, updatedAt: s.updatedAt });
+          setAuthorInfo({ ownerId: s.ownerId, ownerName: s.ownerName, updatedByName: s.updatedByName, updatedById: s.updatedById, updatedAt: s.updatedAt });
           setSurvey({ title: s.title, description: s.description, status: s.status, questions: s.questions });
           if (s.questions.length <= AUTO_OPEN_LIMIT) setOpenIds(Object.fromEntries(s.questions.map((q) => [q.id, true])));
         }
@@ -211,15 +218,20 @@ export default function SurveyBuilder() {
   const onToggle = useCallback((qid) => setOpenIds((o) => ({ ...o, [qid]: !o[qid] })), []);
 
   const addQuestion = useCallback(
-    (type) => {
+    (type, index) => {
       const q = createQuestion(type);
-      setSurvey((s) => ({ ...s, questions: [...s.questions, q] }));
+      // with a position the new item goes exactly there; without one it is added to the end
+      setSurvey((s) => ({ ...s, questions: insertQuestionAt(s.questions, q, index) }));
+      setInsertAt(null);
       setOpenIds((o) => ({ ...o, [q.id]: true }));
       pendingScrollRef.current = q.id;
       touch();
     },
     [touch],
   );
+
+  const openInsert = useCallback((index) => setInsertAt(index), []);
+  const closeInsert = useCallback(() => setInsertAt(null), []);
 
   const setAllOpen = (open) => {
     setOpenIds(open ? Object.fromEntries(survey.questions.map((q) => [q.id, true])) : {});
@@ -228,6 +240,9 @@ export default function SurveyBuilder() {
   // ---- derived data --------------------------------------------------------------
   const progress = useMemo(() => (survey ? computeProgress(survey) : null), [survey]);
   const numbers = useMemo(() => (survey ? getQuestionNumbers(survey.questions) : {}), [survey]);
+  const authorTicks = authorInfo
+    ? creditTicks({ me: user, members, ownerId: authorInfo.ownerId, ownerName: authorInfo.ownerName, updatedById: authorInfo.updatedById, updatedByName: authorInfo.updatedByName, editorShown: editedByAnotherPerson({ me: user, ...authorInfo }) })
+    : { creator: false, editor: false };
 
   // ---- saving --------------------------------------------------------------------
   /** Returns the newer version when a teammate has saved this survey since this page loaded it, else null. */
@@ -267,11 +282,11 @@ export default function SurveyBuilder() {
             return; // the confirmation dialog lets the person decide
           }
         }
-        await updateSurvey(id, { ...payload, status, updatedByName: personName(user) });
+        await updateSurvey(id, { ...payload, status, updatedByName: personName(user), updatedById: user.uid });
         try {
           const fresh = await getSurvey(id);
           baselineRef.current = fresh ? fresh.updatedAt || null : null;
-          if (fresh) setAuthorInfo({ ownerId: fresh.ownerId, ownerName: fresh.ownerName, updatedByName: fresh.updatedByName, updatedAt: fresh.updatedAt });
+          if (fresh) setAuthorInfo({ ownerId: fresh.ownerId, ownerName: fresh.ownerName, updatedByName: fresh.updatedByName, updatedById: fresh.updatedById, updatedAt: fresh.updatedAt });
         } catch (err) {
           baselineRef.current = null; // could not re-read: skip the overwrite check rather than warn wrongly
         }
@@ -406,8 +421,10 @@ export default function SurveyBuilder() {
           <div className="alert alert-secondary small py-2 d-flex align-items-start gap-2">
             <i className="bi bi-people mt-1" aria-hidden="true" />
             <span>
-              Shared with your team. Created by {authorInfo.ownerId === user.uid ? 'you' : authorInfo.ownerName || 'a teammate'}
+              Shared with your team. Created by {creatorLabel({ me: user, ownerId: authorInfo.ownerId, ownerName: authorInfo.ownerName })}
+              <VerifiedTick verified={authorTicks.creator} />
               {authorInfo.updatedByName ? `; last saved by ${authorInfo.updatedByName}` : ''}
+              {authorInfo.updatedByName && <VerifiedTick verified={authorTicks.editor} />}
               {authorInfo.updatedAt ? ` on ${formatDateTimeLong(authorInfo.updatedAt)}` : ''}. If a teammate saves while you are editing, you will be asked before your save replaces theirs.
             </span>
           </div>
@@ -477,22 +494,28 @@ export default function SurveyBuilder() {
               </div>
             )}
 
-            {survey.questions.map((q, index) => (
-              <QuestionEditor
-                key={q.id}
-                question={q}
-                number={numbers[q.id]}
-                index={index}
-                total={survey.questions.length}
-                issues={progress.issuesById[q.id] || []}
-                isOpen={Boolean(openIds[q.id])}
-                onToggle={onToggle}
-                onChange={onQuestionChange}
-                onMove={onMove}
-                onDuplicate={onDuplicate}
-                onDelete={onDelete}
-              />
-            ))}
+            {survey.questions.map((q, index) => {
+              const prev = survey.questions[index - 1];
+              const label = prev ? `Insert after \u201C${(prev.text || 'Untitled').slice(0, 50)}\u201D` : 'Insert at the very start';
+              return (
+                <Fragment key={q.id}>
+                  <InsertPoint index={index} open={insertAt === index} label={label} onOpen={openInsert} onClose={closeInsert} onPick={addQuestion} />
+                  <QuestionEditor
+                    question={q}
+                    number={numbers[q.id]}
+                    index={index}
+                    total={survey.questions.length}
+                    issues={progress.issuesById[q.id] || []}
+                    isOpen={Boolean(openIds[q.id])}
+                    onToggle={onToggle}
+                    onChange={onQuestionChange}
+                    onMove={onMove}
+                    onDuplicate={onDuplicate}
+                    onDelete={onDelete}
+                  />
+                </Fragment>
+              );
+            })}
 
             <AddQuestionPanel onAdd={addQuestion} />
           </div>

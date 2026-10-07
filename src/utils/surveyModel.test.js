@@ -7,6 +7,7 @@ import {
   duplicateQuestion,
   getQuestionIssues,
   getQuestionNumbers,
+  insertQuestionAt,
   makeQuestion,
   normalizeSurveyForSave,
 } from './surveyModel';
@@ -111,5 +112,26 @@ describe('Owner Business Diagnostic template', () => {
   it('has the two grid questions and select-three limits', () => {
     expect(questions.filter((q) => q.type === 'matrix')).toHaveLength(2);
     expect(questions.filter((q) => q.type === 'checkboxes' && q.maxSelections === 3).length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('insertQuestionAt', () => {
+  const q = (id) => ({ id });
+  const ids = (list) => list.map((x) => x.id);
+
+  it('puts the new item at the requested position and leaves the original list alone', () => {
+    const original = [q('a'), q('b'), q('c')];
+    expect(ids(insertQuestionAt(original, q('x'), 0))).toEqual(['x', 'a', 'b', 'c']);
+    expect(ids(insertQuestionAt(original, q('x'), 2))).toEqual(['a', 'b', 'x', 'c']);
+    expect(ids(original)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('appends when there is no position or it is past the end, and starts the list when it is negative', () => {
+    const original = [q('a'), q('b')];
+    expect(ids(insertQuestionAt(original, q('x')))).toEqual(['a', 'b', 'x']);
+    expect(ids(insertQuestionAt(original, q('x'), 2))).toEqual(['a', 'b', 'x']);
+    expect(ids(insertQuestionAt(original, q('x'), 99))).toEqual(['a', 'b', 'x']);
+    expect(ids(insertQuestionAt(original, q('x'), -3))).toEqual(['x', 'a', 'b']);
+    expect(ids(insertQuestionAt([], q('x'), 0))).toEqual(['x']);
   });
 });
