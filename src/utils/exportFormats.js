@@ -37,7 +37,7 @@ export const EXPORT_FORMATS = [
     label: 'PDF report',
     ext: '.pdf',
     icon: 'bi-file-earmark-pdf',
-    hint: 'Branded report with the summary of every question.',
+    hint: 'Branded report with charts and the summary of every question.',
     options: [],
   },
   {

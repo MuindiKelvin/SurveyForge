@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Bar } from 'react-chartjs-2';
 import { CHART_COLORS, INK, TRACK } from '../components/charts';
+import ConfirmModal from '../components/ConfirmModal';
 import DownloadResultsModal from '../components/DownloadResultsModal';
 import Loader from '../components/Loader';
 import QuestionResultCard from '../components/results/QuestionResultCard';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { listResponses, MAX_RESPONSES_LOADED } from '../services/responseService';
+import { deleteAllResponses, deleteResponse, listResponses, MAX_RESPONSES_LOADED } from '../services/responseService';
 import { getSurvey } from '../services/surveyService';
 import { buildResponseTable, computeStats, pct, responsesPerDay } from '../utils/analysis';
 import { formatDateTime, plural } from '../utils/format';
@@ -16,6 +18,7 @@ const TABLE_ROW_LIMIT = 100;
 export default function SurveyResults() {
   const { id } = useParams();
   const toast = useToast();
+  const { user } = useAuth();
   const [survey, setSurvey] = useState(undefined); // undefined = loading, null = not found
   const [responses, setResponses] = useState([]);
   const [tab, setTab] = useState('summary');
@@ -23,6 +26,8 @@ export default function SurveyResults() {
   const [exporting, setExporting] = useState('');
   const [showDownload, setShowDownload] = useState(false);
   const [error, setError] = useState('');
+  const [toDelete, setToDelete] = useState(null); // { id, number } for one response, { all: true } for everything
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
@@ -76,6 +81,29 @@ export default function SurveyResults() {
     [],
   );
 
+  const canDelete = Boolean(survey && user && survey.ownerId === user.uid);
+
+  const confirmDelete = async () => {
+    setDeleting(true);
+    try {
+      if (toDelete.all) {
+        await deleteAllResponses(id);
+        setResponses([]);
+        toast.success('All responses deleted.');
+      } else {
+        await deleteResponse(id, toDelete.id);
+        setResponses((prev) => prev.filter((r) => r.id !== toDelete.id));
+        toast.success('Response deleted.');
+      }
+      setToDelete(null);
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.code === 'permission-denied' ? 'Only the survey creator can delete responses.' : 'Could not delete. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const runExport = async (format, options) => {
     setExporting(format);
     try {
@@ -114,7 +142,9 @@ export default function SurveyResults() {
 
   const first = responses.length ? responses[responses.length - 1].submittedAt : null;
   const last = responses.length ? responses[0].submittedAt : null;
-  const shownRows = table.rows.slice(-TABLE_ROW_LIMIT).reverse();
+  // Same oldest-first order as the table, so each row can be matched to its response id.
+  const orderedIds = [...responses].sort((a, b) => (a.submittedAt || 0) - (b.submittedAt || 0)).map((r) => r.id);
+  const shownRows = table.rows.map((row, i) => ({ row, rid: orderedIds[i] })).slice(-TABLE_ROW_LIMIT).reverse();
 
   return (
     <div className="container-xl py-4">
@@ -146,6 +176,12 @@ export default function SurveyResults() {
             <i className="bi bi-download me-2" aria-hidden="true" />
             Download results
           </button>
+          {canDelete && (
+            <button type="button" className="btn btn-outline-danger" onClick={() => setToDelete({ all: true })} disabled={responses.length === 0}>
+              <i className="bi bi-trash me-2" aria-hidden="true" />
+              Delete all responses
+            </button>
+          )}
         </div>
       </div>
 
@@ -231,12 +267,13 @@ export default function SurveyResults() {
             <div className="card">
               <div className="card-body">
                 <p className="small text-secondary">
-                  Showing the latest {plural(shownRows.length, 'response')} of {responses.length}. Use Download results (Excel, CSV, SPSS and more) to get every response.
+                  Showing the latest {plural(shownRows.length, 'response')} of {responses.length}. Use Download results (PDF with charts, Excel, CSV, SPSS and more) to get every response.
                 </p>
                 <div className="table-responsive sf-resp-table">
                   <table className="table table-sm table-striped align-middle mb-0">
                     <thead>
                       <tr>
+                        {canDelete && <th scope="col" aria-label="Actions" />}
                         {table.headers.map((h, i) => (
                           <th key={i} scope="col" className="text-nowrap" title={String(h)}>
                             {String(h).length > 40 ? `${String(h).slice(0, 39)}\u2026` : h}
@@ -245,8 +282,15 @@ export default function SurveyResults() {
                       </tr>
                     </thead>
                     <tbody>
-                      {shownRows.map((row) => (
-                        <tr key={row[0]}>
+                      {shownRows.map(({ row, rid }) => (
+                        <tr key={rid}>
+                          {canDelete && (
+                            <td>
+                              <button type="button" className="btn btn-sm btn-outline-danger" aria-label={`Delete response ${row[0]}`} title="Delete this response" onClick={() => setToDelete({ id: rid, number: row[0] })}>
+                                <i className="bi bi-trash" aria-hidden="true" />
+                              </button>
+                            </td>
+                          )}
                           {row.map((cell, i) => (
                             <td key={i} className="text-nowrap" title={String(cell)} style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {cell === '' ? <span className="text-secondary">&mdash;</span> : String(cell)}
@@ -262,6 +306,20 @@ export default function SurveyResults() {
           )}
         </>
       )}
+
+      <ConfirmModal
+        show={Boolean(toDelete)}
+        title={toDelete?.all ? 'Delete all responses?' : 'Delete this response?'}
+        message={
+          toDelete?.all
+            ? 'Every response to this survey will be permanently deleted. This cannot be undone. Download the results first if you need a copy.'
+            : `Response #${toDelete?.number ?? ''} will be permanently deleted. This cannot be undone.`
+        }
+        confirmLabel="Delete"
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setToDelete(null)}
+      />
 
       <DownloadResultsModal
         show={showDownload}
